@@ -1,0 +1,76 @@
+#+AUTHOR: tca
+
+* Hi
+whats up what's goin on
+
+** hi this is a section
+and this is it's content
+
+
+** in this sectino i will have scheme code
+
+#+begin_src scheme -r -n
+(require-extension shift-reset)
+ 
+;; http://www.diku.dk/~andrzej/papers/RM-abstract.html
+ 
+(define list-monad
+  (list (lambda (x)
+          (list x))
+        (lambda (m f)
+          (apply append (map f m)))))
+ 
+(define state-monad
+  (list (lambda (x)
+          (lambda (s) (cons s x)))
+        (lambda (m f)
+          (lambda (s)
+            (let ((ms (m s)))
+              (let ((m-state (car ms))
+                    (m-value (cdr ms)))
+                ((f m-value) m-state)))))))
+(define (state-get)
+  (lambda (s) (cons s s)))
+(define (state-put x)
+  (lambda (s) (cons x #f)))
+ 
+(define (return monad x) ((car monad) x))
+(define (bind monad m f) ((cadr monad) m f))
+ 
+(define (example-1)
+  (bind list-monad
+        (list '1 '2 '3)
+        (lambda (x)
+          (bind list-monad
+                (list 'x 'y)
+                (lambda (y)
+                  (return list-monad (cons x y)))))))
+ 
+(define (example-2) ;; should give (0 . 0) when run with any input state
+  (bind state-monad
+        (state-put 0)
+        (lambda (x)
+          (bind state-monad
+                (state-get)
+                (lambda (y)
+                  (return state-monad y))))))
+ 
+(define (reify monad thunk)
+  (bind monad (reset (return monad (thunk)))
+              (lambda (x) (return monad x))))
+ 
+(define (reflect monad m)
+  (shift k (bind monad m k)))
+ 
+(define (example-1-direct)
+  (reify list-monad  (lambda ()
+                       (let ((x (reflect list-monad (list 1 2 3))))
+                         (let ((y (reflect list-monad (list 'x 'y))))
+                           (cons x y))))))
+ 
+(define (example-2-direct)
+  (reify state-monad (lambda ()
+                       (begin (reflect state-monad (state-put 0))
+                              (reflect state-monad (state-get))))))
+
+#+end_src
